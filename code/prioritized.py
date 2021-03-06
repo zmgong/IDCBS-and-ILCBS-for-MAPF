@@ -75,14 +75,14 @@ class PrioritizedPlanningSolver(object):
                             currentEdge = [result[i][j-1], result[i][j]]
                     if currPosOfThisAg in currentPositions:
                         trigger = True
-                        constraints.append({'agent': i, 'loc': [currPosOfThisAg], 'timestep': j})
+                        constraints.append({'agent': i, 'loc': [currPosOfThisAg], 'timestep': j, 'positive': False})
                     else:
                         currentPositions.append(currPosOfThisAg)
                     if currentEdge is not None:
                         reverseEdge = [currentEdge[1], currentEdge[0]]
                         if reverseEdge in currentEdges:
                             trigger = True
-                            newEdgeConstraint = {'agent': i, 'loc': currentEdge, 'timestep': j}
+                            newEdgeConstraint = {'agent': i, 'loc': currentEdge, 'timestep': j, 'positive': False}
                             constraints.append(newEdgeConstraint)
                         elif currentEdge is not None:
                             currentEdges.append(currentEdge)

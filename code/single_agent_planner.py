@@ -56,7 +56,6 @@ def build_constraint_table(constraints, agent):
     #               is_constrained function.
     constraintsTable = {'agent': agent}
     for constraint in constraints:
-        # for negative constraints
         if agent == constraint['agent'] and constraint['positive'] is False:
             timestepInStr = str(constraint['timestep'])
             if timestepInStr not in constraintsTable:
@@ -68,11 +67,7 @@ def build_constraint_table(constraints, agent):
                 if len(constraint['loc']) == 1:
                     constraintsTable[timestepInStr].append(constraint['loc'][0])
                 else:
-
-                    #print("before: " + str(constraintsTable[timestepInStr]))
                     constraintsTable[timestepInStr].append(constraint['loc'])
-
-                    #print("after: " + str(constraintsTable[timestepInStr]))
         # for positive constraints
         elif agent != constraint['agent'] and constraint['positive'] is True:
             timestepInStr = str(constraint['timestep'])
@@ -86,8 +81,6 @@ def build_constraint_table(constraints, agent):
                     constraintsTable[timestepInStr].append(constraint['loc'][0])
                 else:
                     constraintsTable[timestepInStr].append(constraint['loc'])
-    print("Constraints: " + str(constraints))
-    #print("Table is: " + str(constraintsTable))
     return constraintsTable
 
 

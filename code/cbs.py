@@ -30,11 +30,12 @@ def detect_collisions(paths):
     for i in range(numberOfPaths - 1):
         for j in range(i + 1, numberOfPaths):
             collision = detect_collision(paths[i], paths[j])
-        if collision is not None:
-            if len(collision) == 2:
-                result.append({'a1': i, 'a2': j, 'loc': [collision[0]], 'timestep': collision[1]})
-            else:
-                result.append({'a1': i, 'a2': j, 'loc': [collision[0], collision[1]], 'timestep': collision[2]})
+            if collision is not None:
+                if len(collision) == 2:
+                    result.append({'a1': i, 'a2': j, 'loc': [collision[0]], 'timestep': collision[1]})
+                else:
+                    result.append({'a1': i, 'a2': j, 'loc': [collision[0], collision[1]], 'timestep': collision[2]})
+
     return result
 
     ##############################
@@ -46,23 +47,25 @@ def detect_collisions(paths):
 
 def standard_splitting(collision):
     if len(collision['loc']) == 1:
-        return [{'agent': collision['a1'],
-                 'loc': collision['loc'],
-                 'timestep': collision['timestep'],
-                 'positive': False},
-                {'agent': collision['a2'],
-                 'loc': collision['loc'],
-                 'timestep': collision['timestep'],
-                 'positive': False}]
+        result = [{'agent': collision['a1'],
+                   'loc': collision['loc'],
+                   'timestep': collision['timestep'],
+                   'positive': False},
+                  {'agent': collision['a2'],
+                   'loc': collision['loc'],
+                   'timestep': collision['timestep'],
+                   'positive': False}]
+        return result
     else:
-        return [{'agent': collision['a1'],
-                 'loc': [collision['loc'][0], collision['loc'][1]],
-                 'timestep': collision['timestep'],
-                 'positive': False},
-                {'agent': collision['a2'],
-                 'loc': [collision['loc'][1], collision['loc'][0]],
-                 'timestep': collision['timestep'],
-                 'positive': False}]
+        result = [{'agent': collision['a1'],
+                   'loc': [collision['loc'][0], collision['loc'][1]],
+                   'timestep': collision['timestep'],
+                   'positive': False},
+                  {'agent': collision['a2'],
+                   'loc': [collision['loc'][1], collision['loc'][0]],
+                   'timestep': collision['timestep'],
+                   'positive': False}]
+        return result
 
     ##############################
     # Task 3.2: Return a list of (two) constraints to resolve the given collision
@@ -96,16 +99,28 @@ def disjoint_splitting(collision):
                 {'agent': chosenAgent,
                  'loc': collision['loc'],
                  'timestep': collision['timestep'],
-                 'positive': False}]
+                 'positive': False}
+                ]
     else:
-        return [{'agent': chosenAgent,
-                 'loc': [collision['loc'][0], collision['loc'][1]],
-                 'timestep': collision['timestep'],
-                 'positive': True},
-                {'agent': chosenAgent,
-                 'loc': [collision['loc'][1], collision['loc'][0]],
-                 'timestep': collision['timestep'],
-                 'positive': False}]
+        if chosenAgent == collision['a1']:
+            return [{'agent': chosenAgent,
+                     'loc': [collision['loc'][1], collision['loc'][0]],
+                     'timestep': collision['timestep'],
+                     'positive': True},
+                    {'agent': chosenAgent,
+                     'loc': [collision['loc'][0], collision['loc'][1]],
+                     'timestep': collision['timestep'],
+                     'positive': False}
+                    ]
+        else:
+            return [{'agent': chosenAgent,
+                     'loc': [collision['loc'][1], collision['loc'][0]],
+                     'timestep': collision['timestep'],
+                     'positive': False},
+                    {'agent': chosenAgent,
+                     'loc': [collision['loc'][0], collision['loc'][1]],
+                     'timestep': collision['timestep'],
+                     'positive': True}]
 
 
 def paths_violate_constraint(constraint, paths):
@@ -188,6 +203,7 @@ class CBSSolver(object):
 
         root['cost'] = get_sum_of_cost(root['paths'])
         root['collisions'] = detect_collisions(root['paths'])
+        print()
         self.push_node(root)
 
         # Task 3.1: Testing
@@ -195,7 +211,7 @@ class CBSSolver(object):
 
         # Task 3.2: Testing
         for collision in root['collisions']:
-            print(standard_splitting(collision))
+            print(disjoint_splitting(collision))
 
         ##############################
         # Task 3.3: High-Level Search
@@ -212,7 +228,9 @@ class CBSSolver(object):
                 self.print_results(curr)
                 print(curr['paths'])
                 return curr['paths']
-            newConstraints = standard_splitting(curr['collisions'][0])
+            #   disjoint_splitting
+            #   standard_splitting
+            newConstraints = disjoint_splitting(curr['collisions'][0])
             for constraint in newConstraints:
                 if constraint['positive'] is False:
                     childConstraints1 = copy.deepcopy(curr['constraints'])
