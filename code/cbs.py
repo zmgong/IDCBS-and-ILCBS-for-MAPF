@@ -9,12 +9,12 @@ def detect_collision(path1, path2):
     maxLength = max(len(path1), len(path2))
     for t in range(maxLength):
         if get_location(path1, t) == get_location(path2, t):
-            return [[get_location(path1, t)], t]
+            return [get_location(path1, t), t]
         else:
             path1Edge = [get_location(path1, t - 1), get_location(path1, t)]
             reversePath2Edge = [get_location(path2, t), get_location(path2, t - 1)]
             if path1Edge[0] == reversePath2Edge[0] and path1Edge[1] == reversePath2Edge[1]:
-                return [path1Edge, t]
+                return [path1Edge[0], path1Edge[1], t]
     return None
     ##############################
     # Task 3.1: Return the first collision that occurs between two robot paths (or None if there is no collision)
@@ -31,7 +31,10 @@ def detect_collisions(paths):
         for j in range(i + 1, numberOfPaths):
             collision = detect_collision(paths[i], paths[j])
         if collision is not None:
-            result.append({'a1': i, 'a2': j, 'loc': collision[0], 'timestep': collision[1]})
+            if len(collision) == 2:
+                result.append({'a1': i, 'a2': j, 'loc': [collision[0]], 'timestep': collision[1]})
+            else:
+                result.append({'a1': i, 'a2': j, 'loc': [collision[0], collision[1]], 'timestep': collision[2]})
     return result
 
     ##############################
@@ -192,7 +195,7 @@ class CBSSolver(object):
 
         # Task 3.2: Testing
         for collision in root['collisions']:
-            print(disjoint_splitting(collision))
+            print(standard_splitting(collision))
 
         ##############################
         # Task 3.3: High-Level Search
@@ -209,13 +212,13 @@ class CBSSolver(object):
                 self.print_results(curr)
                 print(curr['paths'])
                 return curr['paths']
-            newConstraints = disjoint_splitting(curr['collisions'][0])
+            newConstraints = standard_splitting(curr['collisions'][0])
             for constraint in newConstraints:
                 if constraint['positive'] is False:
-                    childConstraints = copy.deepcopy(curr['constraints'])
-                    childConstraints.append(constraint)
+                    childConstraints1 = copy.deepcopy(curr['constraints'])
+                    childConstraints1.append(constraint)
                     child = {'cost': 0,
-                             'constraints': childConstraints,
+                             'constraints': childConstraints1,
                              'paths': copy.deepcopy(curr['paths']),
                              'collisions': []}
                     agent = constraint['agent']
@@ -227,20 +230,20 @@ class CBSSolver(object):
                         child['collisions'] = detect_collisions(child['paths'])
                         self.push_node(child)
                 else:
-                    childConstraints = copy.deepcopy(curr['constraints'])
-                    childConstraints.append(constraint)
+                    childConstraints2 = copy.deepcopy(curr['constraints'])
+                    childConstraints2.append(constraint)
                     child = {'cost': 0,
-                             'constraints': childConstraints,
+                             'constraints': childConstraints2,
                              'paths': copy.deepcopy(curr['paths']),
                              'collisions': []}
                     agentList = paths_violate_constraint(constraint, child['paths'])
-                    for agent in agentList:
-                        if agent == constraint['agent']:
+                    for i in agentList:
+                        if i == constraint['agent']:
                             continue
-                        newPath = a_star(self.my_map, self.starts[agent], self.goals[agent], self.heuristics[agent],
-                                         agent, child['constraints'])
+                        newPath = a_star(self.my_map, self.starts[i], self.goals[i], self.heuristics[i],
+                                         i, child['constraints'])
                         if newPath is not None:
-                            child['paths'][agent] = copy.deepcopy(newPath)
+                            child['paths'][i] = copy.deepcopy(newPath)
                             child['cost'] = get_sum_of_cost(child['paths'])
                             child['collisions'] = detect_collisions(child['paths'])
                             self.push_node(child)
