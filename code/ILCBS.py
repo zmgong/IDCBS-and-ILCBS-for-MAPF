@@ -155,6 +155,7 @@ def conflict_graph_heuristic(node):
 
         E.append((i['a1'], i['a2']))
     agentThatWhileIncreaseCost = []
+    a = 0
     while len(E) != 0:
         dicForCounting = {}
         for v in V:
@@ -169,10 +170,30 @@ def conflict_graph_heuristic(node):
             if e[0] == int(vertexToIncrease) or e[1] == int(vertexToIncrease):
                 E.remove(e)
         agentThatWhileIncreaseCost.append(vertexToIncrease)
+    # print("h: " + str(len(agentThatWhileIncreaseCost)))
     return len(agentThatWhileIncreaseCost)
 
 
-class CBSSolver(object):
+def findNodeNeedToBeCollapseTo(curr, prev_curr):
+    p = prev_curr
+    p_list = []
+    print("c: " + str(curr['constraints']))
+    print("p: " + str(p['constraints']))
+    while p is not None and curr['parent'] != p['parent']:
+        p = p['parent']
+    return p
+
+
+def parentCheck(B, node):
+    p = node['parent']
+    while p is not None:
+        if p is B:
+            return True
+        p = p['parent']
+    return False
+
+
+class ILCBSSolver(object):
     """The high-level search of CBS."""
 
     def __init__(self, my_map, starts, goals):
@@ -192,21 +213,143 @@ class CBSSolver(object):
 
         self.open_list = []
 
+        self.prev_curr = None
+
         # compute heuristics for the low-level search
         self.heuristics = []
         for goal in self.goals:
             self.heuristics.append(compute_heuristics(my_map, goal))
 
     def push_node(self, node):
-        heapq.heappush(self.open_list, (node['cost'] + node['h_value'], len(node['collisions']), self.num_of_generated, node))
-        # print("Generate node {}".format(self.num_of_generated))
+        if node['C']:
+            heapq.heappush(self.open_list, (node['F_value'], len(node['collisions']), self.num_of_generated, node))
+        else:
+            heapq.heappush(self.open_list, (node['f_value'], len(node['collisions']), self.num_of_generated, node))
+        print("Generate node {}".format(self.num_of_generated))
         self.num_of_generated += 1
 
     def pop_node(self):
         _, _, id, node = heapq.heappop(self.open_list)
-        # print("Expand node {}".format(id))
+        print("Expand node {}".format(id))
         self.num_of_expanded += 1
         return node
+
+    def collapse(self, B):
+        print("Collapse triggered!!!!!!!!!!!")
+        result = None
+        ifAnyNodeIsRemoved = False
+        for i in self.open_list:
+            nodeInTuple = i[3]
+            if parentCheck(B, nodeInTuple):
+                ifAnyNodeIsRemoved = True
+                if nodeInTuple['C'] is False:
+                    if result is None or nodeInTuple['f_value'] < result:
+                        result = nodeInTuple['f_value']
+                elif nodeInTuple['C'] is True:
+                    if result is None or nodeInTuple['F_value'] < result:
+                        result = nodeInTuple['F_value']
+                self.open_list.remove(i)
+        if ifAnyNodeIsRemoved is True:
+            B['C'] = True
+            B['F_value'] = result
+        else:
+            B['C'] = False
+        if B not in self.open_list:
+            self.push_node(B)
+        print(B['F_value'])
+
+    def restore(self, root):
+        open_restore = []
+        open_restore.insert(0, root)
+        threshold = root['F_value']
+        target = None
+        close = []
+        while len(open_restore) != 0:
+            curr = open_restore.pop(0)
+            if curr['f_value'] == threshold:
+                target = curr
+            if curr['f_value'] >= threshold:
+                close.append(curr)
+            else:
+                self.num_of_expanded += 1
+                newConstraints = disjoint_splitting(curr['collisions'][0])
+                close.append(curr)
+                childrenList = self.generateChildren(curr, newConstraints)
+                for child in childrenList:
+                    open_restore.insert(0, child)
+
+        singleParent = target['parent']
+        p_list = []
+        while singleParent is not None and singleParent is not root:
+            p_list.append(singleParent)
+            singleParent = singleParent['parent']
+        for p in p_list:
+            min_f = None
+            for c in close:
+                ifCollapse = False
+                if c['parent'] is p and c is not target and c not in p_list:
+                    for gc in close:
+                        if gc['parent'] is c:
+                            ifCollapse = True
+                            if min_f is None or min_f > gc['f_value']:
+                                min_f = gc['f_value']
+                    if ifCollapse:
+                        c['C'] = True
+                        c['F_value'] = min_f
+                    else:
+                        c['C'] = False
+                    self.push_node(c)
+
+    def generateChildren(self, curr, newConstraints):
+        childrenList = []
+        for constraint in newConstraints:
+            if constraint['positive'] is False:
+                childConstraints1 = copy.deepcopy(curr['constraints'])
+                childConstraints1.append(constraint)
+                child = {'cost': 0,
+                         'constraints': childConstraints1,
+                         'paths': copy.deepcopy(curr['paths']),
+                         'collisions': [],
+                         'parent': curr,
+                         'C': False}
+                agent = constraint['agent']
+                newPath = a_star(self.my_map, self.starts[agent], self.goals[agent], self.heuristics[agent],
+                                 agent, child['constraints'])
+                if newPath is not None:
+                    child['paths'][agent] = copy.deepcopy(newPath)
+                    child['cost'] = get_sum_of_cost(child['paths'])
+                    child['collisions'] = detect_collisions(child['paths'])
+                    child['h_value'] = conflict_graph_heuristic(child)
+                    child['f_value'] = child['cost']
+                    childrenList.append(child)
+            else:
+                pathIsNone = False
+                childConstraints2 = copy.deepcopy(curr['constraints'])
+                childConstraints2.append(constraint)
+                child = {'cost': 0,
+                         'constraints': childConstraints2,
+                         'paths': copy.deepcopy(curr['paths']),
+                         'collisions': [],
+                         'parent': curr,
+                         'C': False}
+                agentList = paths_violate_constraint(constraint, child['paths'])
+                for i in agentList:
+                    if i == constraint['agent']:
+                        continue
+                    newPath = a_star(self.my_map, self.starts[i], self.goals[i], self.heuristics[i],
+                                     i, child['constraints'])
+                    if newPath is not None:
+                        child['paths'][i] = copy.deepcopy(newPath)
+                        child['cost'] = get_sum_of_cost(child['paths'])
+                        child['collisions'] = detect_collisions(child['paths'])
+                        child['h_value'] = conflict_graph_heuristic(child)
+                        child['f_value'] = child['cost']
+                    else:
+                        pathIsNone = True
+                        break
+                if pathIsNone is False:
+                    childrenList.append(child)
+        return childrenList
 
     def find_solution(self, disjoint=True):
         """ Finds paths for all agents from their start locations to their goal locations
@@ -225,7 +368,10 @@ class CBSSolver(object):
                 'constraints': [],
                 'paths': [],
                 'collisions': [],
-                'h_value': 0
+                'h_value': 0,
+                'f_value': 0,
+                'parent': None,
+                'C': False
                 }
         for i in range(self.num_of_agents):  # Find initial path for each agent
             path = a_star(self.my_map, self.starts[i], self.goals[i], self.heuristics[i],
@@ -255,55 +401,63 @@ class CBSSolver(object):
         #           Ensure to create a copy of any objects that your child nodes might inherit
 
         while len(self.open_list) != 0:
+
+            #############################
+            print('Before pop')
+            for i in self.open_list:
+                if len(i[3]['constraints']) == 0:
+                    print('root in the open????????')
+            #############################
+
             curr = self.pop_node()
+
             if len(curr['collisions']) == 0:
                 self.print_results(curr)
                 # print(curr['paths'])
                 return curr['paths']
+
+            #############################
+            print('After pop, before collapse')
+            for i in self.open_list:
+                if len(i[3]['constraints']) == 0:
+                    print('root in the open????????')
+            #############################
+
+            if self.prev_curr is not curr['parent']:
+                # Try to collapse.
+                B = findNodeNeedToBeCollapseTo(curr, self.prev_curr)
+                if B is None:
+                    print("Fail to find the node need to collapse")
+                    print("Go func: findNodeNeedToBeCollapseTo")
+                    exit(1)
+                self.collapse(B)
+
+            #############################
+            print('After collapse, before restore')
+            for i in self.open_list:
+                if len(i[3]['constraints']) == 0:
+                    print('root in the open????????')
+            #############################
+
+            if curr['C'] is True:
+                print("restore triggered...........")
+                # restore curr
+                self.restore(curr)
+
+                #############################
+                print('After restore')
+                for i in self.open_list:
+                    if len(i[3]['constraints']) == 0:
+                        print('root in the open????????')
+                #############################
+
             #   disjoint_splitting
             #   standard_splitting
             newConstraints = disjoint_splitting(curr['collisions'][0])
-            for constraint in newConstraints:
-                if constraint['positive'] is False:
-                    childConstraints1 = copy.deepcopy(curr['constraints'])
-                    childConstraints1.append(constraint)
-                    child = {'cost': 0,
-                             'constraints': childConstraints1,
-                             'paths': copy.deepcopy(curr['paths']),
-                             'collisions': []}
-                    agent = constraint['agent']
-                    newPath = a_star(self.my_map, self.starts[agent], self.goals[agent], self.heuristics[agent],
-                                     agent, child['constraints'])
-                    if newPath is not None:
-                        child['paths'][agent] = copy.deepcopy(newPath)
-                        child['cost'] = get_sum_of_cost(child['paths'])
-                        child['collisions'] = detect_collisions(child['paths'])
-                        child['h_value'] = conflict_graph_heuristic(child)
-                        self.push_node(child)
-                else:
-                    pathIsNone = False
-                    childConstraints2 = copy.deepcopy(curr['constraints'])
-                    childConstraints2.append(constraint)
-                    child = {'cost': 0,
-                             'constraints': childConstraints2,
-                             'paths': copy.deepcopy(curr['paths']),
-                             'collisions': []}
-                    agentList = paths_violate_constraint(constraint, child['paths'])
-                    for i in agentList:
-                        if i == constraint['agent']:
-                            continue
-                        newPath = a_star(self.my_map, self.starts[i], self.goals[i], self.heuristics[i],
-                                         i, child['constraints'])
-                        if newPath is not None:
-                            child['paths'][i] = copy.deepcopy(newPath)
-                            child['cost'] = get_sum_of_cost(child['paths'])
-                            child['collisions'] = detect_collisions(child['paths'])
-                            child['h_value'] = conflict_graph_heuristic(child)
-                        else:
-                            pathIsNone = True
-                            break
-                    if pathIsNone is False:
-                        self.push_node(child)
+            self.prev_curr = curr
+            childrenList = self.generateChildren(curr, newConstraints)
+            for child in childrenList:
+                self.push_node(child)
         return None
 
     def print_results(self, node):

@@ -17,12 +17,6 @@ def detect_collision(path1, path2):
             if path1Edge[0] == reversePath2Edge[0] and path1Edge[1] == reversePath2Edge[1]:
                 return [path1Edge[0], path1Edge[1], t]
     return None
-    ##############################
-    # Task 3.1: Return the first collision that occurs between two robot paths (or None if there is no collision)
-    #           There are two types of collisions: vertex collision and edge collision.
-    #           A vertex collision occurs if both robots occupy the same location at the same timestep
-    #           An edge collision occurs if the robots swap their location at the same timestep.
-    #           You should use "get_location(path, t)" to get the location of a robot at time t.
 
 
 def detect_collisions(paths):
@@ -38,12 +32,6 @@ def detect_collisions(paths):
                     result.append({'a1': i, 'a2': j, 'loc': [collision[0], collision[1]], 'timestep': collision[2]})
 
     return result
-
-    ##############################
-    # Task 3.1: Return a list of first collisions between all robot pairs.
-    #           A collision can be represented as dictionary that contains the id of the two robots, the vertex or edge
-    #           causing the collision, and the timestep at which the collision occurred.
-    #           You should use your detect_collision function to find a collision between two robots.
 
 
 def standard_splitting(collision):
@@ -68,26 +56,8 @@ def standard_splitting(collision):
                    'positive': False}]
         return result
 
-    ##############################
-    # Task 3.2: Return a list of (two) constraints to resolve the given collision
-    #           Vertex collision: the first constraint prevents the first agent to be at the specified location at the
-    #                            specified timestep, and the second constraint prevents the second agent to be at the
-    #                            specified location at the specified timestep.
-    #           Edge collision: the first constraint prevents the first agent to traverse the specified edge at the
-    #                          specified timestep, and the second constraint prevents the second agent to traverse the
-    #                          specified edge at the specified timestep
-
 
 def disjoint_splitting(collision):
-    ##############################
-    # Task 4.1: Return a list of (two) constraints to resolve the given collision
-    #           Vertex collision: the first constraint enforces one agent to be at the specified location at the
-    #                            specified timestep, and the second constraint prevents the same agent to be at the
-    #                            same location at the timestep.
-    #           Edge collision: the first constraint enforces one agent to traverse the specified edge at the
-    #                          specified timestep, and the second constraint prevents the same agent to traverse the
-    #                          specified edge at the specified timestep
-    #           Choose the agent randomly
     randomNum = random.randint(0, 1)
     chosenAgent = collision['a1']
     if randomNum == 1:
@@ -172,7 +142,7 @@ def conflict_graph_heuristic(node):
     return len(agentThatWhileIncreaseCost)
 
 
-class CBSSolver(object):
+class IDCBSSolver(object):
     """The high-level search of CBS."""
 
     def __init__(self, my_map, starts, goals):
@@ -198,14 +168,14 @@ class CBSSolver(object):
             self.heuristics.append(compute_heuristics(my_map, goal))
 
     def push_node(self, node):
-        heapq.heappush(self.open_list, (node['cost'] + node['h_value'], len(node['collisions']), self.num_of_generated, node))
+        heapq.heappush(self.open_list,
+                       (self.num_of_generated, len(node['collisions']), self.num_of_generated, node))
         # print("Generate node {}".format(self.num_of_generated))
         self.num_of_generated += 1
 
     def pop_node(self):
         _, _, id, node = heapq.heappop(self.open_list)
-        # print("Expand node {}".format(id))
-        self.num_of_expanded += 1
+
         return node
 
     def find_solution(self, disjoint=True):
@@ -236,32 +206,34 @@ class CBSSolver(object):
 
         root['cost'] = get_sum_of_cost(root['paths'])
         root['collisions'] = detect_collisions(root['paths'])
+        print()
         self.push_node(root)
 
-        # Task 3.1: Testing
         print(root['collisions'])
 
-        # Task 3.2: Testing
         for collision in root['collisions']:
             print(disjoint_splitting(collision))
 
-        ##############################
-        # Task 3.3: High-Level Search
-        #           Repeat the following as long as the open list is not empty:
-        #             1. Get the next node from the open list (you can use self.pop_node()
-        #             2. If this node has no collision, return solution
-        #             3. Otherwise, choose the first collision and convert to a list of constraints (using your
-        #                standard_splitting function). Add a new child node to your open list for each constraint
-        #           Ensure to create a copy of any objects that your child nodes might inherit
-
+        threshold = 0
+        f_valueOfPrunedNodes = []
         while len(self.open_list) != 0:
             curr = self.pop_node()
+
+            f_value = curr['h_value'] + curr['cost']
+            # f_value = curr['cost']
+            if f_value > threshold:
+                f_valueOfPrunedNodes.append(f_value)
+                if len(self.open_list) == 0:
+                    self.push_node(root)
+                    threshold = min(f_valueOfPrunedNodes)
+                    f_valueOfPrunedNodes = []
+                continue
+
             if len(curr['collisions']) == 0:
                 self.print_results(curr)
-                # print(curr['paths'])
                 return curr['paths']
-            #   disjoint_splitting
-            #   standard_splitting
+
+            self.num_of_expanded += 1
             newConstraints = disjoint_splitting(curr['collisions'][0])
             for constraint in newConstraints:
                 if constraint['positive'] is False:

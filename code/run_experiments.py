@@ -2,11 +2,14 @@
 import argparse
 import glob
 from pathlib import Path
+
+from ILCBS import ILCBSSolver
 from cbs import CBSSolver
 from independent import IndependentSolver
 from prioritized import PrioritizedPlanningSolver
 from visualize import Animation
 from single_agent_planner import get_sum_of_cost
+from IDCBS import IDCBSSolver
 
 SOLVER = "CBS"
 
@@ -103,6 +106,14 @@ if __name__ == '__main__':
             print("***Run Prioritized***")
             solver = PrioritizedPlanningSolver(my_map, starts, goals)
             paths = solver.find_solution()
+        elif args.solver == "IDCBS":
+            print("***Run IDCBS***")
+            idcbs = IDCBSSolver(my_map, starts, goals)
+            paths = idcbs.find_solution(args.disjoint)
+        elif args.solver == "ILCBS":
+            print("***Run ILCBS***")
+            ilcbs = ILCBSSolver(my_map, starts, goals)
+            paths = ilcbs.find_solution(args.disjoint)
         else:
             raise RuntimeError("Unknown solver!")
 
